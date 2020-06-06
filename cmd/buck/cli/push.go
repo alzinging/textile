@@ -56,7 +56,7 @@ var bucketPushCmd = &cobra.Command{
 			seed := filepath.Join(root, bucks.SeedName)
 			ctx, acancel := context.WithTimeout(context.Background(), cmd.Timeout)
 			defer acancel()
-			if err = buck.ArchiveFile(ctx, seed, bucks.SeedName); err != nil {
+			if err = buck.SaveFile(ctx, seed, bucks.SeedName); err != nil {
 				if !errors.Is(err, os.ErrNotExist) {
 					cmd.Fatal(err)
 				}
@@ -114,7 +114,7 @@ var bucketPushCmd = &cobra.Command{
 
 		ctx, cancel := context.WithTimeout(context.Background(), cmd.Timeout)
 		defer cancel()
-		if err = buck.Archive(ctx); err != nil {
+		if err = buck.Save(ctx); err != nil {
 			cmd.Fatal(err)
 		}
 		cmd.Message("%s", aurora.White(buck.Path().Cid()).Bold())

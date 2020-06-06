@@ -87,7 +87,7 @@ var bucketPullCmd = &cobra.Command{
 
 		ctx, cancel := context.WithTimeout(context.Background(), cmd.Timeout)
 		defer cancel()
-		if err = buck.Archive(ctx); err != nil {
+		if err = buck.Save(ctx); err != nil {
 			cmd.Fatal(err)
 		}
 

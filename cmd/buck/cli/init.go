@@ -180,7 +180,7 @@ Use the '--existing' flag to initialize from an existing remote bucket.
 			}
 			actx, acancel := context.WithTimeout(context.Background(), cmd.Timeout)
 			defer acancel()
-			if err = buck.ArchiveFile(actx, seed, bucks.SeedName); err != nil {
+			if err = buck.SaveFile(actx, seed, bucks.SeedName); err != nil {
 				cmd.Fatal(err)
 			}
 
@@ -203,7 +203,7 @@ Use the '--existing' flag to initialize from an existing remote bucket.
 			setCidVersion(buck, key)
 			ctx, cancel := context.WithTimeout(context.Background(), cmd.Timeout)
 			defer cancel()
-			if err = buck.Archive(ctx); err != nil {
+			if err = buck.Save(ctx); err != nil {
 				cmd.Fatal(err)
 			}
 			cmd.Success("Initialized from remote and pulled %d objects to %s", aurora.White(count).Bold(), aurora.White(root).Bold())
