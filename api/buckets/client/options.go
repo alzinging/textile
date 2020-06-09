@@ -4,6 +4,7 @@ import "github.com/ipfs/interface-go-ipfs-core/path"
 
 type options struct {
 	root     path.Resolved
+	password string
 	progress chan<- int64
 }
 
@@ -13,6 +14,13 @@ type Option func(*options)
 func WithFastForwardOnly(root path.Resolved) Option {
 	return func(args *options) {
 		args.root = root
+	}
+}
+
+// WithPassword encrypts the file with a password.
+func WithPassword(password string) Option {
+	return func(args *options) {
+		args.password = password
 	}
 }
 

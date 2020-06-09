@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/textileio/textile/api/buckets/client"
 	"github.com/textileio/textile/cmd"
 )
 
@@ -22,7 +23,8 @@ var bucketCatCmd = &cobra.Command{
 		ctx, cancel := clients.Ctx.Thread(getFileTimeout)
 		defer cancel()
 		key := config.Viper.GetString("key")
-		if err := clients.Buckets.PullPath(ctx, key, args[0], os.Stdout); err != nil {
+		pass := config.Viper.GetString("password")
+		if err := clients.Buckets.PullPath(ctx, key, args[0], os.Stdout, client.WithPassword(pass)); err != nil {
 			cmd.Fatal(err)
 		}
 	},

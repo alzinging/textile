@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/odeke-em/drive/src/dcrypto"
+
 	"github.com/ipfs/go-cid"
 	ipfsfiles "github.com/ipfs/go-ipfs-files"
 	logging "github.com/ipfs/go-log"
@@ -340,12 +342,13 @@ func (s *Service) PushPath(server pb.API_PushPathServer) error {
 	if err != nil {
 		return err
 	}
-	var key, headerPath, root string
+	var key, headerPath, root, pass string
 	switch payload := req.Payload.(type) {
 	case *pb.PushPathRequest_Header_:
 		key = payload.Header.Key
 		headerPath = payload.Header.Path
 		root = payload.Header.Root
+		pass = payload.Header.Pass
 	default:
 		return fmt.Errorf("push bucket path header is required")
 	}
@@ -429,9 +432,19 @@ func (s *Service) PushPath(server pb.API_PushPathServer) error {
 		}
 	}()
 
+	var r io.Reader
+	if pass != "" {
+		r, err = dcrypto.NewEncrypter(reader, []byte(pass))
+		if err != nil {
+			return err
+		}
+	} else {
+		r = reader
+	}
+
 	pth, err := s.IPFSClient.Unixfs().Add(
 		server.Context(),
-		ipfsfiles.NewReaderFile(reader),
+		ipfsfiles.NewReaderFile(r),
 		options.Unixfs.CidVersion(1),
 		options.Unixfs.Pin(false),
 		options.Unixfs.Progress(true),
@@ -505,9 +518,21 @@ func (s *Service) PullPath(req *pb.PullPathRequest, server pb.API_PullPathServer
 	if file == nil {
 		return fmt.Errorf("node is a directory")
 	}
+
+	var reader io.Reader
+	if req.Pass != "" && !strings.Contains(req.Path, bucks.SeedName) {
+		r, err := dcrypto.NewDecrypter(file, []byte(req.Pass))
+		if err != nil {
+			return err
+		}
+		reader = r
+	} else {
+		reader = file
+	}
+
 	buf := make([]byte, chunkSize)
 	for {
-		n, err := file.Read(buf)
+		n, err := reader.Read(buf)
 		if n > 0 {
 			if err := server.Send(&pb.PullPathReply{
 				Chunk: buf[:n],

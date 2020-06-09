@@ -25,7 +25,6 @@ import (
 	"github.com/ipfs/go-unixfs/importer/helpers"
 	"github.com/ipfs/go-unixfs/importer/trickle"
 	options "github.com/ipfs/interface-go-ipfs-core/options"
-	"github.com/ipfs/interface-go-ipfs-core/path"
 )
 
 func init() {
@@ -45,8 +44,10 @@ var (
 const (
 	// repoPath is the path to the local bucket repository.
 	repoPath = ".textile/repo"
-	// rootName is the name of the file that stores the current root.
-	rootName = "ROOT"
+	// localRootName is the file that stores the bucket's local root.
+	localRootName = "LOCAL"
+	// remoteRootName is the file that stores the bucket's remote root.
+	remoteRootName = "REMOTE"
 
 	// PatchExt is used to ignore tmp files during a pull.
 	PatchExt = ".buckpatch"
@@ -55,7 +56,8 @@ const (
 // Bucket tracks a local bucket tree structure.
 type Bucket struct {
 	path   string
-	root   cid.Cid
+	local  cid.Cid
+	remote cid.Cid
 	ds     ds.Batching
 	bsrv   bserv.BlockService
 	dag    ipld.DAGService
@@ -83,7 +85,7 @@ func NewBucket(pth string, layout options.Layout) (*Bucket, error) {
 		layout: layout,
 		cidver: 1,
 	}
-	if err := b.loadRoot(); err != nil {
+	if err := b.loadRoots(); err != nil {
 		if _, ok := err.(*os.PathError); !ok {
 			return nil, err
 		}
@@ -91,21 +93,31 @@ func NewBucket(pth string, layout options.Layout) (*Bucket, error) {
 	return b, nil
 }
 
-// loadRoot reads the current root from a file.
-func (b *Bucket) loadRoot() error {
-	name := filepath.Join(b.path, filepath.Dir(repoPath), rootName)
-	data, err := ioutil.ReadFile(name)
+// loadRoots reads the local and remote roots from file.
+func (b *Bucket) loadRoots() error {
+	dir := filepath.Dir(repoPath)
+	local, err := ioutil.ReadFile(filepath.Join(b.path, dir, localRootName))
 	if err != nil {
 		return err
 	}
-	if len(data) == 0 {
-		return nil
+	if len(local) > 0 {
+		c, err := cid.Cast(local)
+		if err != nil {
+			return err
+		}
+		b.local = c
 	}
-	c, err := cid.Cast(data)
+	remote, err := ioutil.ReadFile(filepath.Join(b.path, dir, remoteRootName))
 	if err != nil {
 		return err
 	}
-	b.root = c
+	if len(remote) > 0 {
+		c, err := cid.Cast(remote)
+		if err != nil {
+			return err
+		}
+		b.remote = c
+	}
 	return nil
 }
 
@@ -115,9 +127,25 @@ func (b *Bucket) SetCidVersion(v int) {
 	b.cidver = v
 }
 
-// Path returns the bucket's current root cid.
-func (b *Bucket) Path() path.Resolved {
-	return path.IpfsPath(b.root)
+// Local returns the bucket's local root cid.
+func (b *Bucket) Local() cid.Cid {
+	return b.local
+}
+
+// Remote returns the bucket's remote root cid.
+// If the bucket is encrypted, this will return a different value than Root().
+func (b *Bucket) Remote() cid.Cid {
+	return b.remote
+}
+
+// SetRemote sets the bucket's remote root cid.
+func (b *Bucket) SetRemote(c cid.Cid) error {
+	dir := filepath.Dir(repoPath)
+	if err := ioutil.WriteFile(filepath.Join(b.path, dir, remoteRootName), c.Bytes(), 0644); err != nil {
+		return err
+	}
+	b.remote = c
+	return nil
 }
 
 // Get returns the node at cid from the bucket.
@@ -131,16 +159,16 @@ func (b *Bucket) Save(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return b.saveRoot(n.Cid())
+	return b.saveLocalRoot(n.Cid())
 }
 
-// saveRoot writes the current root to a file.
-func (b *Bucket) saveRoot(c cid.Cid) error {
-	name := filepath.Join(b.path, filepath.Dir(repoPath), rootName)
-	if err := ioutil.WriteFile(name, c.Bytes(), 0644); err != nil {
+// saveLocalRoot writes the local root to file.
+func (b *Bucket) saveLocalRoot(c cid.Cid) error {
+	dir := filepath.Dir(repoPath)
+	if err := ioutil.WriteFile(filepath.Join(b.path, dir, localRootName), c.Bytes(), 0644); err != nil {
 		return err
 	}
-	b.root = c
+	b.local = c
 	return nil
 }
 
@@ -248,7 +276,7 @@ func (b *Bucket) SaveFile(ctx context.Context, pth string, name string) error {
 	if err := copyLinks(ctx, n, editor.GetDagService(), b.dag); err != nil {
 		return err
 	}
-	return b.saveRoot(n.Cid())
+	return b.saveLocalRoot(n.Cid())
 }
 
 // HashFile returns the cid of the file at path.
@@ -274,8 +302,8 @@ func (b *Bucket) HashFile(pth string) (cid.Cid, error) {
 func (b *Bucket) Diff(ctx context.Context, pth string) (diff []*dagutils.Change, err error) {
 	tmp := dagutils.NewMemoryDagService()
 	var an ipld.Node
-	if b.root.Defined() {
-		an, err = b.dag.Get(ctx, b.root)
+	if b.local.Defined() {
+		an, err = b.dag.Get(ctx, b.local)
 		if err != nil {
 			return
 		}

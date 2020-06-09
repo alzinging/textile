@@ -94,7 +94,7 @@ var bucketPushCmd = &cobra.Command{
 			}
 		}
 
-		xr := buck.Path()
+		xr := path.IpfsPath(buck.Remote())
 		var rm []change
 		startProgress()
 		for _, c := range diff {
@@ -117,7 +117,10 @@ var bucketPushCmd = &cobra.Command{
 		if err = buck.Save(ctx); err != nil {
 			cmd.Fatal(err)
 		}
-		cmd.Message("%s", aurora.White(buck.Path().Cid()).Bold())
+		if err := buck.SetRemote(getRemoteRoot(key)); err != nil {
+			cmd.Fatal(err)
+		}
+		cmd.Message("%s", aurora.White(buck.Remote()).Bold())
 	},
 }
 
@@ -136,7 +139,13 @@ func addFile(key string, xroot path.Resolved, name, filePath string, force bool)
 	progress := make(chan int64)
 	go func() {
 		for up := range progress {
-			if err := bar.Set(int(up)); err != nil {
+			var u int
+			if up > info.Size() {
+				u = int(info.Size())
+			} else {
+				u = int(up)
+			}
+			if err := bar.Set(u); err != nil {
 				cmd.Fatal(err)
 			}
 		}
@@ -144,7 +153,8 @@ func addFile(key string, xroot path.Resolved, name, filePath string, force bool)
 
 	ctx, cancel := clients.Ctx.Thread(addFileTimeout)
 	defer cancel()
-	opts := []client.Option{client.WithProgress(progress)}
+	pass := config.Viper.GetString("password")
+	opts := []client.Option{client.WithProgress(progress), client.WithPassword(pass)}
 	if !force {
 		opts = append(opts, client.WithFastForwardOnly(xroot))
 	}

@@ -108,6 +108,7 @@ func (c *Client) PushPath(ctx context.Context, key, pth string, reader io.Reader
 				Key:  key,
 				Path: pth,
 				Root: xr,
+				Pass: args.password,
 			},
 		},
 	}); err != nil {
@@ -198,6 +199,7 @@ func (c *Client) PullPath(ctx context.Context, key, pth string, writer io.Writer
 	stream, err := c.c.PullPath(ctx, &pb.PullPathRequest{
 		Key:  key,
 		Path: pth,
+		Pass: args.password,
 	})
 	if err != nil {
 		return err

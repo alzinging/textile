@@ -52,6 +52,8 @@ Use the '--existing' flag to initialize from an existing remote bucket.
 			cmd.Fatal(fmt.Errorf("bucket %s is already initialized", root))
 		}
 
+		pass := config.Viper.GetString("password")
+
 		existing, err := c.Flags().GetBool("existing")
 		if err != nil {
 			cmd.Fatal(err)
@@ -93,6 +95,17 @@ Use the '--existing' flag to initialize from an existing remote bucket.
 			selected := bi[index]
 			config.Viper.Set("thread", selected.ID.String())
 			config.Viper.Set("key", selected.Key)
+
+			if pass == "" {
+				passp := promptui.Prompt{
+					Label: fmt.Sprintf("Enter the encryption password for %s (optional)", selected.Name),
+					Mask:  '*',
+				}
+				pass, err = passp.Run()
+				if err != nil {
+					cmd.End("")
+				}
+			}
 		}
 
 		var dbID thread.ID
@@ -116,14 +129,28 @@ Use the '--existing' flag to initialize from an existing remote bucket.
 
 		var name string
 		if initRemote {
-			prompt := promptui.Prompt{
+			namep := promptui.Prompt{
 				Label: "Enter a name for your new bucket (optional)",
 			}
 			var err error
-			name, err = prompt.Run()
+			name, err = namep.Run()
 			if err != nil {
 				cmd.End("")
 			}
+			if pass == "" {
+				passp := promptui.Prompt{
+					Label: "Enter an encryption password for your new bucket (optional)",
+					Mask:  '*',
+				}
+				pass, err = passp.Run()
+				if err != nil {
+					cmd.End("")
+				}
+			}
+		}
+
+		if pass != "" {
+			config.Viper.Set("password", pass)
 		}
 
 		if !dbID.Defined() {
@@ -183,6 +210,11 @@ Use the '--existing' flag to initialize from an existing remote bucket.
 			if err = buck.SaveFile(actx, seed, bucks.SeedName); err != nil {
 				cmd.Fatal(err)
 			}
+			// We just have the seed file, which is never encrypted.
+			// So, the remote root will be equal to the local root.
+			if err = buck.SetRemote(buck.Local()); err != nil {
+				cmd.Fatal(err)
+			}
 
 			printLinks(rep.Links)
 		}
@@ -200,7 +232,11 @@ Use the '--existing' flag to initialize from an existing remote bucket.
 			if err != nil {
 				cmd.Fatal(err)
 			}
-			setCidVersion(buck, key)
+			rr := getRemoteRoot(key)
+			if err := buck.SetRemote(rr); err != nil {
+				cmd.Fatal(err)
+			}
+			buck.SetCidVersion(int(rr.Version()))
 			ctx, cancel := context.WithTimeout(context.Background(), cmd.Timeout)
 			defer cancel()
 			if err = buck.Save(ctx); err != nil {

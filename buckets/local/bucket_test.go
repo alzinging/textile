@@ -22,9 +22,9 @@ func TestBucket_SetCidVersion(t *testing.T) {
 	buck0.SetCidVersion(0)
 	err := buck0.Save(context.Background())
 	require.Nil(t, err)
-	assert.NotEmpty(t, buck0.Path())
+	assert.NotEmpty(t, buck0.Local())
 	assert.Equal(t, 0, buck0.cidver)
-	assert.Equal(t, 0, int(buck0.root.Version()))
+	assert.Equal(t, 0, int(buck0.local.Version()))
 	buck0.Close()
 
 	buck1 := makeBucket(t, "testdata/a", options.BalancedLayout)
@@ -32,18 +32,38 @@ func TestBucket_SetCidVersion(t *testing.T) {
 	buck1.SetCidVersion(1)
 	err = buck1.Save(context.Background())
 	require.Nil(t, err)
-	assert.NotEmpty(t, buck1.Path())
+	assert.NotEmpty(t, buck1.Local())
 	assert.Equal(t, 1, buck1.cidver)
-	assert.Equal(t, 1, int(buck1.root.Version()))
+	assert.Equal(t, 1, int(buck1.local.Version()))
 }
 
-func TestBucket_Path(t *testing.T) {
+func TestBucket_Local(t *testing.T) {
 	buck := makeBucket(t, "testdata/a", options.BalancedLayout)
 	defer buck.Close()
 
 	err := buck.Save(context.Background())
 	require.Nil(t, err)
-	assert.NotEmpty(t, buck.Path())
+	assert.NotEmpty(t, buck.Local())
+}
+
+func TestBucket_Remote(t *testing.T) {
+	buck := makeBucket(t, "testdata/a", options.BalancedLayout)
+	defer buck.Close()
+
+	err := buck.Save(context.Background())
+	require.Nil(t, err)
+	assert.Empty(t, buck.Remote())
+}
+
+func TestBucket_SetRemote(t *testing.T) {
+	buck := makeBucket(t, "testdata/a", options.BalancedLayout)
+	defer buck.Close()
+
+	err := buck.Save(context.Background())
+	require.Nil(t, err)
+	err = buck.SetRemote(buck.local)
+	require.Nil(t, err)
+	require.Equal(t, buck.local, buck.remote)
 }
 
 func TestBucket_Get(t *testing.T) {
@@ -53,9 +73,9 @@ func TestBucket_Get(t *testing.T) {
 	err := buck.Save(context.Background())
 	require.Nil(t, err)
 
-	n, err := buck.Get(context.Background(), buck.Path().Cid())
+	n, err := buck.Get(context.Background(), buck.Local())
 	require.Nil(t, err)
-	assert.Equal(t, buck.Path().Cid(), n.Cid())
+	assert.Equal(t, buck.Local(), n.Cid())
 }
 
 func TestBucket_Save(t *testing.T) {
@@ -63,12 +83,12 @@ func TestBucket_Save(t *testing.T) {
 
 	err := buck.Save(context.Background())
 	require.Nil(t, err)
-	assert.NotEmpty(t, buck.Path())
+	assert.NotEmpty(t, buck.Local())
 	buck.Close()
 
 	buck2 := makeBucket(t, "testdata/a", options.BalancedLayout)
 	defer buck2.Close()
-	n, err := buck2.Get(context.Background(), buck.Path().Cid())
+	n, err := buck2.Get(context.Background(), buck.Local())
 	require.Nil(t, err)
 	checkLinks(t, buck2, n)
 
@@ -82,12 +102,12 @@ func TestBucket_SaveFile(t *testing.T) {
 
 	err := buck.SaveFile(context.Background(), "testdata/c/one.jpg", "one.jpg")
 	require.Nil(t, err)
-	assert.NotEmpty(t, buck.Path())
+	assert.NotEmpty(t, buck.Local())
 	buck.Close()
 
 	buck2 := makeBucket(t, "testdata/c", options.BalancedLayout)
 	defer buck2.Close()
-	n, err := buck2.Get(context.Background(), buck.Path().Cid())
+	n, err := buck2.Get(context.Background(), buck.Local())
 	require.Nil(t, err)
 	checkLinks(t, buck2, n)
 

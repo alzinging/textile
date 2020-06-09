@@ -90,6 +90,9 @@ var bucketPullCmd = &cobra.Command{
 		if err = buck.Save(ctx); err != nil {
 			cmd.Fatal(err)
 		}
+		if err := buck.SetRemote(getRemoteRoot(key)); err != nil {
+			cmd.Fatal(err)
+		}
 
 		// Re-apply local changes if not pulling hard
 		if !hard {
@@ -107,7 +110,7 @@ var bucketPullCmd = &cobra.Command{
 				}
 			}
 		}
-		cmd.Message("%s", aurora.White(buck.Path().Cid()).Bold())
+		cmd.Message("%s", aurora.White(buck.Remote()).Bold())
 	},
 }
 
@@ -228,7 +231,8 @@ func getFile(key, filePath, name string, size int64, c cid.Cid) {
 
 	ctx, cancel := clients.Ctx.Thread(getFileTimeout)
 	defer cancel()
-	if err := clients.Buckets.PullPath(ctx, key, filePath, file, client.WithProgress(progress)); err != nil {
+	pass := config.Viper.GetString("password")
+	if err := clients.Buckets.PullPath(ctx, key, filePath, file, client.WithPassword(pass), client.WithProgress(progress)); err != nil {
 		cmd.Fatal(err)
 	}
 	finishBar(bar, filePath, c)

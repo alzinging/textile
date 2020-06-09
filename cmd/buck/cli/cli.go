@@ -10,7 +10,6 @@ import (
 	pb "github.com/textileio/textile/api/buckets/pb"
 	"github.com/textileio/textile/buckets/local"
 	"github.com/textileio/textile/cmd"
-	"github.com/textileio/textile/util"
 	"github.com/textileio/uiprogress"
 )
 
@@ -42,6 +41,10 @@ var (
 				Key:      "thread",
 				DefValue: "",
 			},
+			"password": {
+				Key:      "password",
+				DefValue: "",
+			},
 		},
 		EnvPre: "BUCK",
 		Global: false,
@@ -68,6 +71,7 @@ func Init(rootCmd *cobra.Command) {
 	bucketInitCmd.PersistentFlags().String("org", "", "Org username")
 	bucketInitCmd.PersistentFlags().Bool("public", false, "Allow public access")
 	bucketInitCmd.PersistentFlags().String("thread", "", "Thread ID")
+	bucketInitCmd.PersistentFlags().String("password", "", "Encryption password")
 	bucketInitCmd.Flags().BoolP("existing", "e", false, "Initializes from an existing remote bucket if true")
 	if err := cmd.BindFlags(config.Viper, bucketInitCmd, config.Flags); err != nil {
 		cmd.Fatal(err)
@@ -101,17 +105,7 @@ func printLinks(reply *pb.LinksReply) {
 }
 
 func setCidVersion(buck *local.Bucket, key string) {
-	if !buck.Path().Root().Defined() {
-		ctx, cancel := clients.Ctx.Thread(cmd.Timeout)
-		defer cancel()
-		root, err := clients.Buckets.Root(ctx, key)
-		if err != nil {
-			cmd.Fatal(err)
-		}
-		rp, err := util.NewResolvedPath(root.Root.Path)
-		if err != nil {
-			cmd.Fatal(err)
-		}
-		buck.SetCidVersion(int(rp.Root().Version()))
+	if !buck.Remote().Defined() {
+		buck.SetCidVersion(int(getRemoteRoot(key).Version()))
 	}
 }
